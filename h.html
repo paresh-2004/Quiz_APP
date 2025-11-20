@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dynamic Quiz Application</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--card-bg:#fff;--muted:#6b7280;--accent:#2563eb}
+    *{box-sizing:border-box}
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#f3f4f6;margin:0;color:#111}
+    .container{max-width:860px;margin:36px auto;padding:18px}
+    .card{background:var(--card-bg);border-radius:12px;padding:20px;box-shadow:0 6px 24px rgba(15,23,42,0.06)}
+    h1{margin:0 0 8px;font-size:20px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    label{display:block;font-size:14px;color:var(--muted)}
+    select,button{padding:10px 12px;border-radius:8px;border:1px solid #e6e9ef;background:#fff}
+    button{cursor:pointer}
+    #quiz-container{display:none}
+    #timer{font-weight:600;color:var(--accent);margin-bottom:8px}
+    #question{font-size:18px;margin:12px 0}
+    .options{display:flex;flex-direction:column;gap:8px}
+    .option{padding:10px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;display:flex;align-items:center;gap:10px}
+    .option input{transform:scale(1.1)}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+    .progress{height:8px;background:#eef2ff;border-radius:8px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7c3aed);width:0%}
+    @media(max-width:640px){.row{flex-direction:column}}
+    .small{font-size:13px;color:var(--muted)}
+    canvas{max-width:100%;margin-top:18px}
+    .result-list{list-style:none;padding:0;margin:8px 0}
+    .result-list li{padding:8px 0;border-bottom:1px dashed #eef2ff}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" id="config-card">
+      <h1>Dynamic Quiz</h1>
+      <p class="small">Select category and difficulty, then start. Each question has a countdown timer.</p>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="category">Category</label>
+          <select id="category">
+            <option value="general">General Knowledge</option>
+            <option value="science">Science</option>
+            <option value="math">Mathematics</option>
+          </select>
+        </div>
+        <div>
+          <label for="difficulty">Difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div style="align-self:end">
+          <button id="startBtn">Start Quiz</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="quiz-container">
+      <div id="timer">Time Remaining: <span id="timeVal">15</span>s</div>
+      <div id="question"></div>
+      <div id="options" class="options"></div>
+      <div class="meta">
+        <div class="small">Question <span id="qNum">0</span>/<span id="qTotal">0</span></div>
+        <div style="width:40%">
+          <div class="progress"><i id="progBar"></i></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button id="nextBtn">Next</button>
+        <button id="quitBtn">Quit</button>
+      </div>
+    </div>
+
+    <div class="card" id="result-section" style="display:none">
+      <h1>Results</h1>
+      <div id="result-summary"></div>
+      <canvas id="timeChart" height="120"></canvas>
+      <canvas id="scoreChart" height="120"></canvas>
+      <div style="margin-top:12px"><button id="restartBtn">Restart Quiz</button></div>
+    </div>
+  </div>
+
+  <script>
+    //----------- Questions (expand or modify as needed) -----------
+    const questions = [
+      // General Knowledge (Easy)
+      {question:"Capital of France?", options:["London","Paris","Berlin","Rome"], answer:1, category:"general", difficulty:"easy"},
+      {question:"Largest ocean?", options:["Indian","Atlantic","Pacific","Arctic"], answer:2, category:"general", difficulty:"easy"},
+      {question:"How many days in a week?", options:["5","6","7","8"], answer:2, category:"general", difficulty:"easy"},
+      {question:"National animal of India?", options:["Lion","Tiger","Elephant","Leopard"], answer:1, category:"general", difficulty:"easy"},
+      {question:"Fastest land animal?", options:["Cheetah","Lion","Horse","Tiger"], answer:0, category:"general", difficulty:"easy"},
+      {question:"Largest continent?", options:["Africa","Asia","Europe","Australia"], answer:1, category:"general", difficulty:"easy"},
+      {question:"Primary color?", options:["Green","Blue","Brown","Black"], answer:1, category:"general", difficulty:"easy"},
+      {question:"Smallest planet?", options:["Mars","Mercury","Venus","Earth"], answer:1, category:"general", difficulty:"easy"},
+      {question:"Tallest animal?", options:["Giraffe","Elephant","Camel","Zebra"], answer:0, category:"general", difficulty:"easy"},
+      {question:"Hottest planet?", options:["Mercury","Venus","Mars","Saturn"], answer:1, category:"general", difficulty:"easy"},
+      // General Knowledge (Medium)
+      {question:"Who invented the light bulb?", options:["Newton","Edison","Tesla","Einstein"], answer:1, category:"general", difficulty:"medium"},
+      {question:"What gas do plants release?", options:["Oxygen","CO2","Nitrogen","Hydrogen"], answer:0, category:"general", difficulty:"medium"},
+      {question:"How many bones in adult body?", options:["206","201","208","210"], answer:0, category:"general", difficulty:"medium"},
+      {question:"Largest desert?", options:["Sahara","Gobi","Arctic","Kalahari"], answer:0, category:"general", difficulty:"medium"},
+      {question:"First man on moon?", options:["Neil Armstrong","Buzz Aldrin","Yuri Gagarin","Shepard"], answer:0, category:"general", difficulty:"medium"},
+      {question:"Speed of light?", options:["200k km/s","300k km/s","350k km/s","250k km/s"], answer:1, category:"general", difficulty:"medium"},
+      {question:"Deepest ocean trench?", options:["Tonga","Java","Mariana","Puerto Rico"], answer:2, category:"general", difficulty:"medium"},
+      {question:"Human heart chambers?", options:["2","3","4","5"], answer:2, category:"general", difficulty:"medium"},
+      {question:"Largest mammal?", options:["Elephant","Blue Whale","Giraffe","Orca"], answer:1, category:"general", difficulty:"medium"},
+      {question:"Metal at room temp liquid?", options:["Copper","Mercury","Iron","Zinc"], answer:1, category:"general", difficulty:"medium"},
+      // General Knowledge (Hard)
+      {question:"First programming language?", options:["Fortran","C","Ada","Plankalkül"], answer:3, category:"general", difficulty:"hard"},
+      {question:"Einstein's equation?", options:["F=ma","E=mc^2","PV=nRT","a^2+b^2=c^2"], answer:1, category:"general", difficulty:"hard"},
+      {question:"Deepest lake?", options:["Victoria","Baikal","Tanganyika","Superior"], answer:1, category:"general", difficulty:"hard"},
+      {question:"Smallest prime number?", options:["0","1","2","3"], answer:2, category:"general", difficulty:"hard"},
+      {question:"Currency of Japan?", options:["Yen","Won","Dollar","Ruble"], answer:0, category:"general", difficulty:"hard"},
+      {question:"Largest internal organ?", options:["Heart","Liver","Lungs","Kidney"], answer:1, category:"general", difficulty:"hard"},
+      {question:"Inventor of WWW?", options:["Bill Gates","Tim Berners-Lee","Linus Torvalds","Dennis Ritchie"], answer:1, category:"general", difficulty:"hard"},
+      {question:"Chemical symbol for Gold?", options:["Ag","Au","Fe","Go"], answer:1, category:"general", difficulty:"hard"},
+      // Science (Easy)
+      {question:"Water's chemical formula?", options:["H2O","O2","CO2","NaCl"], answer:0, category:"science", difficulty:"easy"},
+      {question:"Which is a mammal?", options:["Snake","Frog","Bat","Shark"], answer:2, category:"science", difficulty:"easy"},
+      {question:"Planet known as the Red Planet?", options:["Earth","Mars","Jupiter","Venus"], answer:1, category:"science", difficulty:"easy"},
+      // ... add more for science/math
+    ];
+
+    //-------------- State --------------
+    let filteredQuestions = [];
+    let currentQuestion = 0;
+    let userAnswers = [];
+    let timePerQuestion = [];
+    let timer = null;
+    let timeLeft = 15;
+    const TIME_LIMIT = 15;
+    let timeChart = null, scoreChart = null;
+
+    // DOM refs
+    const startBtn = document.getElementById('startBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const quitBtn = document.getElementById('quitBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    startBtn.addEventListener('click', startQuiz);
+    nextBtn.addEventListener('click', nextQuestion);
+    quitBtn.addEventListener('click', () => { if(confirm('Quit quiz and view results?')) showResults(); });
+    restartBtn.addEventListener('click', () => location.reload());
+
+    //-------------- Helpers --------------
+    function shuffle(arr){
+      for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}
+      return arr;
+    }
+
+    function startQuiz(){
+      const cat = document.getElementById('category').value;
+      const difficulty = document.getElementById('difficulty').value;
+      filteredQuestions = questions.filter(q => q.category === cat && q.difficulty === difficulty);
+      if(filteredQuestions.length === 0){
+        alert('No questions found for this selection. Please choose another category or add questions.');
+        return;
+      }
+      filteredQuestions = shuffle(filteredQuestions.slice());
+      currentQuestion = 0; userAnswers = []; timePerQuestion = [];
+      document.getElementById('config-card').style.display = 'none';
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('quiz-container').style.display = 'block';
+      document.getElementById('qTotal').textContent = filteredQuestions.length;
+      loadQuestion();
+    }
+
+    function loadQuestion(){
+      clearInterval(timer);
+      if(currentQuestion >= filteredQuestions.length){
+        showResults(); return;
+      }
+      timeLeft = TIME_LIMIT;
+      document.getElementById('timeVal').textContent = timeLeft;
+      updateProgressBar();
+      timer = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timeVal').textContent = timeLeft;
+        updateProgressBar();
+        if(timeLeft <= 0){
+          clearInterval(timer);
+          saveAnswer(-1);
+        }
+      },1000);
+
+      const qObj = filteredQuestions[currentQuestion];
+      document.getElementById('qNum').textContent = currentQuestion + 1;
+      document.getElementById('question').textContent = qObj.question;
+      const optsCont = document.getElementById('options');
+      optsCont.innerHTML = '';
+      qObj.options.forEach((opt, idx) =>{
+        const div = document.createElement('div'); div.className='option';
+        const input = document.createElement('input'); input.type='radio'; input.name='option'; input.value=idx; input.id='opt'+idx;
+        const label = document.createElement('label'); label.htmlFor='opt'+idx; label.textContent = opt;
+        input.addEventListener('change', ()=>{
+          Array.from(optsCont.children).forEach(c=>c.style.boxShadow='');
+          div.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.08)';
+        });
+        div.appendChild(input); div.appendChild(label); optsCont.appendChild(div);
+      });
+    }
+
+    function nextQuestion(){
+      const opts = document.getElementsByName('option');
+      let selected = -1;
+      for(const o of opts) if(o.checked) { selected = parseInt(o.value); break; }
+      clearInterval(timer);
+      saveAnswer(selected);
+    }
+
+    function saveAnswer(selected){
+      const spent = Math.max(0, Math.min(TIME_LIMIT, TIME_LIMIT - timeLeft));
+      userAnswers.push(selected);
+      timePerQuestion.push(spent);
+      currentQuestion++;
+      setTimeout(()=>{
+        if(currentQuestion < filteredQuestions.length) loadQuestion();
+        else showResults();
+      }, 120);
+    }
+
+    function showResults(){
+      clearInterval(timer);
+      document.getElementById('quiz-container').style.display = 'none';
+      document.getElementById('result-section').style.display = 'block';
+      const total = filteredQuestions.length;
+      let correct = 0, incorrect = 0, skipped = 0;
+      filteredQuestions.forEach((q, idx) =>{
+        const ans = userAnswers[idx];
+        if(ans === -1 || typeof ans === 'undefined') skipped++;
+        else if(ans === q.answer) correct++;
+        else incorrect++;
+      });
+      const summaryEl = document.getElementById('result-summary');
+      let html = `<p class="small">Total Questions: ${total}</p>`;
+      html += `<p class="small">Correct: ${correct} &nbsp;&nbsp; Incorrect: ${incorrect} &nbsp;&nbsp; Skipped: ${skipped}</p>`;
+      html += '<h3 class="small">Details:</h3><ul class="result-list">';
+      filteredQuestions.forEach((q, idx)=>{
+        const u = userAnswers[idx];
+        const your = (u===-1 || typeof u==='undefined') ? 'No answer' : q.options[u];
+        const correctOpt = q.options[q.answer];
+        const t = timePerQuestion[idx] ?? 0;
+        html += `<li><strong>Q${idx+1}:</strong> ${q.question}<br><span class="small">Your answer: ${your} | Correct: ${correctOpt} | Time: ${t}s</span></li>`;
+      });
+      html += '</ul>';
+      summaryEl.innerHTML = html;
+      drawCharts(correct, incorrect, timePerQuestion, skipped);
+    }
+
+    function drawCharts(correct, incorrect, times, skipped){
+      if(timeChart) timeChart.destroy();
+      if(scoreChart) scoreChart.destroy();
+      const ctx1 = document.getElementById('timeChart').getContext('2d');
+      timeChart = new Chart(ctx1, {
+        type: 'bar',
+        data: { labels: times.map((_,i)=>`Q${i+1}`), datasets:[{ label:'Time per Question (s)', data: times, backgroundColor:'#2563eb' }] },
+        options: { responsive:true, plugins:{legend:{display:false}} }
+      });
+      const ctx2 = document.getElementById('scoreChart').getContext('2d');
+      scoreChart = new Chart(ctx2, {
+        type: 'pie',
+        data: { labels:['Correct','Incorrect','Skipped'], datasets:[{ data:[correct, incorrect, skipped], backgroundColor:['#16c784','#e35d6a','#aab8cf'] }] },
+        options: { responsive:true }
+      });
+    }
+
+    function updateProgressBar(){
+      const total = filteredQuestions.length || 1;
+      const percent = ((currentQuestion) / total) * 100;
+      document.getElementById('progBar').style.width = percent + '%';
+    }
+  </script>
+</body>
+</html>
